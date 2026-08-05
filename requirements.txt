@@ -1,0 +1,24 @@
+﻿# ============================================================
+# CardioAI - 心血管疾病智能辅助系统
+#
+# 依赖安装说明:
+#   1) 创建并激活 conda 虚拟环境:
+#        conda create -n cardioenv python=3.10
+#        conda activate cardioenv
+#   2) 安装全部依赖:
+#        pip install -r requirements.txt
+# ============================================================
+
+pandas
+openpyxl
+numpy
+scikit-learn
+xgboost
+joblib
+streamlit
+plotly
+Flask
+python-dotenv
+langchain-openai
+dashscope
+requests

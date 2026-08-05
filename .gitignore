@@ -1,0 +1,24 @@
+# CardioAI · Git 忽略规则
+
+# --- 虚拟环境（本地 500MB+，由 venv 重建）---
+cardioenv/
+
+# --- Python 缓存 ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# --- 敏感配置（含真实 API Key，绝不入库）---
+.env
+
+# --- 训练产物（可由 module2_predictor/train_and_save.py 重新生成）---
+*.pkl
+
+# --- 编辑器 / 系统 ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Claude Code 本地设置 ---
+.claude/settings.local.json

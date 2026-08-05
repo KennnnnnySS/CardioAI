@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CardioAI · 语音问诊</title>
+    <style>
+        /* ============ 设计令牌（与模块2同一套系统） ============ */
+        :root {
+            --ink: #10212b;
+            --muted: #5c6f7a;
+            --paper: #f6fafb;
+            --card: #ffffff;
+            --line: #d8e2e6;
+            --pulse: #0e7c86;
+            --pulse-soft: #e1f0f1;
+            --pulse-ink: #0a5a62;
+            --danger: #e5484d;
+            --danger-soft: #fce8e8;
+            --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, "Segoe UI", sans-serif;
+            --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+            --radius: 16px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: var(--sans);
+            color: var(--ink);
+            background: linear-gradient(180deg, #ecf4f6 0%, var(--paper) 34%);
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+        }
+        :focus-visible { outline: 2px solid var(--pulse); outline-offset: 2px; }
+        .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px 80px; }
+
+        /* ============ 英雄区 ============ */
+        .hero {
+            position: relative;
+            padding: 52px 0 40px;
+            background-image:
+                repeating-linear-gradient(90deg, rgba(14, 124, 134, .045) 0 1px, transparent 1px 26px),
+                repeating-linear-gradient(0deg, rgba(14, 124, 134, .045) 0 1px, transparent 1px 26px);
+            border-bottom: 1px solid var(--line);
+        }
+        .hero .trace { display: block; width: 100%; height: 56px; margin-bottom: 30px; }
+        .trace path {
+            fill: none;
+            stroke: var(--pulse);
+            stroke-width: 2.4;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 1;
+            stroke-dashoffset: 1;
+            animation: draw 1.7s ease-out .1s forwards;
+        }
+        @keyframes draw { to { stroke-dashoffset: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            .trace path { animation: none; stroke-dashoffset: 0; }
+        }
+        .eyebrow {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--pulse-ink);
+            margin: 0 0 12px;
+        }
+        h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 0 0 14px; }
+        .lede { color: var(--muted); max-width: 560px; margin: 0; font-size: 15px; }
+
+        /* ============ 对话区 ============ */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 26px;
+            margin-top: 32px;
+            box-shadow: 0 1px 2px rgba(16, 33, 43, .04), 0 12px 32px rgba(16, 33, 43, .05);
+        }
+        .bubble { max-width: 86%; padding: 14px 18px; border-radius: 16px; font-size: 15px; animation: rise .35s ease both; }
+        @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+        .bubble.user { background: var(--pulse); color: #fff; margin: 0 0 20px auto; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+        .bubble.doc  { background: var(--paper); border: 1px solid var(--line); margin: 0 auto 20px 0; border-bottom-left-radius: 4px; }
+        .doc-meta {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .08em;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+        .bubble.doc audio { width: 100%; height: 40px; margin-bottom: 12px; }
+        #text-answer { white-space: pre-wrap; }
+
+        /* ============ 提问区 ============ */
+        form { display: flex; gap: 12px; align-items: flex-end; margin-top: 6px; }
+        .field { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 13px; font-weight: 600; }
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-family: inherit;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--paper);
+            resize: vertical;
+            min-height: 64px;
+            transition: border-color .15s, background .15s;
+        }
+        textarea:focus { outline: none; border-color: var(--pulse); background: #fff; box-shadow: 0 0 0 3px var(--pulse-soft); }
+        button {
+            padding: 13px 26px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: var(--sans);
+            color: #fff;
+            background: var(--pulse);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: 0 6px 18px rgba(14, 124, 134, .28);
+            transition: transform .12s, box-shadow .12s;
+        }
+        button:hover { transform: translateY(-1px); }
+        button:disabled { opacity: .6; cursor: not-allowed; box-shadow: none; }
+
+        /* ============ 加载中: 心跳脉冲 ============ */
+        #loading {
+            margin-top: 18px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 14px;
+            justify-content: center;
+        }
+        .heart { font-size: 20px; animation: heartbeat 1s ease-in-out infinite; }
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.25); }
+            40% { transform: scale(1); }
+            60% { transform: scale(1.18); }
+        }
+        @media (prefers-reduced-motion: reduce) { .heart { animation: none; } }
+
+        #err { margin-top: 16px; color: var(--danger); text-align: center; display: none; font-size: 14px; }
+
+        footer { margin-top: 26px; text-align: center; color: var(--muted); font-size: 12px; font-family: var(--mono); letter-spacing: .05em; }
+
+        @media (max-width: 600px) {
+            form { flex-direction: column; align-items: stretch; }
+            .bubble { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+
+        <!-- 英雄区: ECG 波形签名 -->
+        <header class="hero">
+            <svg class="trace" viewBox="0 0 240 56" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M0 44 C 8 44 14 34 22 34 C 30 34 34 44 42 44 L 66 44
+                          C 72 44 75 47 79 47 C 82 47 83 41 86 41
+                          L 89 8 L 97 52 C 102 52 106 44 116 44 L 120 44
+                          C 130 44 138 29 148 31 C 157 33 163 44 174 44 L 240 44" />
+            </svg>
+            <p class="eyebrow">Cardio Voice Consultation</p>
+            <h1>心血管健康 语音问诊</h1>
+            <p class="lede">把想问的写下来，AI 医生会先给出专业解答，再由 CosyVoice 以语音播报给你听。</p>
+        </header>
+
+        <section class="card">
+            <!-- 对话区 -->
+            <div id="chat">
+                <div class="bubble user" id="user-bubble" style="display:none"></div>
+                <div class="bubble doc" id="doc-bubble" style="display:none">
+                    <div class="doc-meta">AI 医生 · CosyVoice 语音播报</div>
+                    <audio id="audio" controls></audio>
+                    <div id="text-answer"></div>
+                </div>
+            </div>
+
+            <!-- 提问区 -->
+            <form id="ask-form">
+                <div class="field">
+                    <label for="question">你的问题</label>
+                    <textarea id="question" rows="2" maxlength="500" placeholder="例如：高血压患者日常饮食应该注意什么？" required></textarea>
+                </div>
+                <button type="submit" id="submit-btn">提问并播报</button>
+            </form>
+
+            <div id="loading"><span class="heart">❤</span> 正在思考并合成语音，请稍候…</div>
+            <div id="err"></div>
+        </section>
+
+        <footer>CardioAI · 模块3 语音问诊 — DeepSeek + CosyVoice / Flask</footer>
+    </div>
+
+    <script>
+        const form = document.getElementById("ask-form");
+        const submitBtn = document.getElementById("submit-btn");
+        const loadingBox = document.getElementById("loading");
+        const errBox = document.getElementById("err");
+        const userBubble = document.getElementById("user-bubble");
+        const docBubble = document.getElementById("doc-bubble");
+        const audioEl = document.getElementById("audio");
+        const textAnswerEl = document.getElementById("text-answer");
+        const questionEl = document.getElementById("question");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const question = questionEl.value.trim();
+            if (!question) return;
+
+            // 展示用户的问题气泡
+            userBubble.style.display = "block";
+            userBubble.textContent = question;
+
+            docBubble.style.display = "none";
+            errBox.style.display = "none";
+            loadingBox.style.display = "flex";
+            submitBtn.disabled = true;
+            submitBtn.textContent = "生成中…";
+
+            try {
+                const resp = await fetch("/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || "请求失败");
+
+                // 构造 base64 音频并自动播放
+                audioEl.src = "data:audio/mp3;base64," + data.audio_base64;
+                audioEl.load();
+                audioEl.play().catch(() => { /* 部分浏览器限制自动播放 */ });
+
+                textAnswerEl.textContent = data.text_answer;
+                docBubble.style.display = "block";
+            } catch (err) {
+                errBox.textContent = "请求失败：" + err.message;
+                errBox.style.display = "block";
+            } finally {
+                loadingBox.style.display = "none";
+                submitBtn.disabled = false;
+                submitBtn.textContent = "提问并播报";
+            }
+        });
+    </script>
+</body>
+</html>

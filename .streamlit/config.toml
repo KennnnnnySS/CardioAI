@@ -1,0 +1,7 @@
+# CardioAI · Streamlit 主题（与模块2/3同一套设计令牌）
+[theme]
+primaryColor = "#0E7C86"
+backgroundColor = "#F6FAFB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#10212B"
+font = "sans serif"

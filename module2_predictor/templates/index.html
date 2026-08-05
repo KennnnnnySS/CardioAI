@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CardioAI · 心血管风险预测</title>
+    <style>
+        /* ============ 设计令牌 ============ */
+        :root {
+            --ink: #10212b;
+            --muted: #5c6f7a;
+            --paper: #f6fafb;
+            --card: #ffffff;
+            --line: #d8e2e6;
+            --pulse: #0e7c86;      /* 心电青绿 · 品牌/正常波形 */
+            --pulse-soft: #e1f0f1;
+            --pulse-ink: #0a5a62;
+            --danger: #e5484d;     /* 仅高风险状态 */
+            --danger-soft: #fce8e8;
+            --safe: #0b7a47;
+            --safe-soft: #e5f3eb;
+            --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, "Segoe UI", sans-serif;
+            --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+            --radius: 16px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: var(--sans);
+            color: var(--ink);
+            background: linear-gradient(180deg, #ecf4f6 0%, var(--paper) 34%);
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+        }
+        :focus-visible { outline: 2px solid var(--pulse); outline-offset: 2px; }
+
+        .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px 80px; }
+
+        /* ============ 英雄区: 心电图纸网格 + 波形签名 ============ */
+        .hero {
+            position: relative;
+            padding: 56px 0 46px;
+            background-image:
+                repeating-linear-gradient(90deg, rgba(14, 124, 134, .045) 0 1px, transparent 1px 26px),
+                repeating-linear-gradient(0deg, rgba(14, 124, 134, .045) 0 1px, transparent 1px 26px);
+            border-bottom: 1px solid var(--line);
+        }
+        .hero .trace {
+            display: block;
+            width: 100%;
+            height: 64px;
+            margin-bottom: 34px;
+        }
+        .trace path {
+            fill: none;
+            stroke: var(--pulse);
+            stroke-width: 2.4;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 1;
+            stroke-dashoffset: 1;
+            animation: draw 1.7s ease-out .1s forwards;
+            transition: stroke .6s ease;
+        }
+        .trace path.high { stroke: var(--danger); }
+        @keyframes draw { to { stroke-dashoffset: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            .trace path { animation: none; stroke-dashoffset: 0; }
+        }
+        .eyebrow {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--pulse-ink);
+            margin: 0 0 12px;
+        }
+        h1 {
+            font-size: clamp(30px, 5vw, 44px);
+            line-height: 1.12;
+            letter-spacing: -0.01em;
+            margin: 0 0 14px;
+        }
+        .lede { color: var(--muted); max-width: 560px; margin: 0; font-size: 15px; }
+
+        /* ============ 主卡片 ============ */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 30px 30px 34px;
+            margin-top: 34px;
+            box-shadow: 0 1px 2px rgba(16, 33, 43, .04), 0 12px 32px rgba(16, 33, 43, .05);
+        }
+        .card-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+        .card-head h2 { font-size: 17px; margin: 0; }
+        .card-head .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 20px; }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field.full { grid-column: 1 / -1; }
+        label { font-size: 13px; font-weight: 600; }
+        .input-wrap { position: relative; display: flex; align-items: center; }
+        input, select {
+            width: 100%;
+            padding: 11px 44px 11px 14px;
+            font-size: 15px;
+            font-family: inherit;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--paper);
+            color: var(--ink);
+            transition: border-color .15s, background .15s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--pulse);
+            background: #fff;
+            box-shadow: 0 0 0 3px var(--pulse-soft);
+        }
+        input[type="number"] { font-variant-numeric: tabular-nums; }
+        .unit {
+            position: absolute;
+            right: 13px;
+            pointer-events: none;
+            font-size: 12px;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+        select { appearance: none; background-image: none; cursor: pointer; }
+        .select-arrow { position: absolute; right: 13px; font-size: 10px; color: var(--muted); pointer-events: none; }
+        .hint { color: var(--muted); font-size: 12px; }
+
+        .actions { margin-top: 26px; text-align: center; }
+        button {
+            padding: 13px 52px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: var(--sans);
+            color: #fff;
+            background: var(--pulse);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 6px 18px rgba(14, 124, 134, .28);
+            transition: transform .12s, box-shadow .12s, background .2s;
+        }
+        button:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(14, 124, 134, .34); }
+        button:active { transform: translateY(0); }
+        button:disabled { opacity: .6; cursor: not-allowed; box-shadow: none; }
+
+        #err { margin-top: 18px; color: var(--danger); text-align: center; display: none; font-size: 14px; }
+
+        /* ============ 结果: 监护仪读数卡片 ============ */
+        .result { margin-top: 26px; display: none; }
+        .vital {
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--pulse);
+            border-radius: 14px;
+            background: var(--paper);
+            padding: 20px 24px;
+            animation: rise .45s ease both;
+        }
+        .vital.ok  { border-left-color: var(--safe); }
+        .vital.bad { border-left-color: var(--danger); }
+        @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+        .vital-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+        .vital-label { font-size: 15px; font-weight: 700; }
+        .vital-label.ok  { color: var(--safe); }
+        .vital-label.bad { color: var(--danger); }
+        .status-pill {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .06em;
+            padding: 4px 10px;
+            border-radius: 999px;
+        }
+        .status-pill.ok  { background: var(--safe-soft); color: var(--safe); }
+        .status-pill.bad { background: var(--danger-soft); color: var(--danger); }
+        .vital-value {
+            font-family: var(--mono);
+            font-variant-numeric: tabular-nums;
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            line-height: 1.1;
+        }
+        .vital-note { color: var(--muted); margin: 10px 0 0; font-size: 13px; }
+
+        footer { margin-top: 30px; text-align: center; color: var(--muted); font-size: 12px; font-family: var(--mono); letter-spacing: .05em; }
+
+        @media (max-width: 640px) {
+            .grid { grid-template-columns: 1fr; }
+            .card { padding: 22px 18px 26px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+
+        <!-- 英雄区: ECG 波形签名 -->
+        <header class="hero">
+            <svg class="trace" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true">
+                <path id="ecg-path"
+                      d="M0 48 C 8 48 14 37 22 37 C 30 37 34 48 42 48 L 66 48
+                         C 72 48 75 51 79 51 C 82 51 83 44 86 44
+                         L 89 8 L 97 56 C 102 56 106 48 116 48 L 120 48
+                         C 130 48 138 31 148 33 C 157 35 163 48 174 48 L 240 48" />
+            </svg>
+            <p class="eyebrow">Cardiology Risk Screen</p>
+            <h1>心血管疾病风险预测</h1>
+            <p class="lede">输入 11 项体检指标，基于 68,492 例样本训练的 XGBoost 模型即时给出患病概率。波形颜色随风险变化：青绿 = 低风险，红 = 高风险。</p>
+        </header>
+
+        <!-- 主表单卡片 -->
+        <section class="card">
+            <div class="card-head">
+                <h2>体检指标</h2>
+                <span class="sub">11 FIELDS</span>
+            </div>
+            <form id="risk-form">
+                <div class="grid">
+                    <div class="field">
+                        <label for="age">年龄</label>
+                        <div class="input-wrap">
+                            <input type="number" id="age" name="age" min="1" max="120" required placeholder="如 55" />
+                            <span class="unit">岁</span>
+                        </div>
+                        <span class="hint">提交时自动换算为天数</span>
+                    </div>
+                    <div class="field">
+                        <label for="gender">性别</label>
+                        <div class="input-wrap">
+                            <select id="gender" name="gender" required>
+                                <option value="1">女</option>
+                                <option value="2">男</option>
+                            </select>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="height">身高</label>
+                        <div class="input-wrap">
+                            <input type="number" id="height" name="height" min="50" max="230" step="0.1" required placeholder="如 168" />
+                            <span class="unit">cm</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="weight">体重</label>
+                        <div class="input-wrap">
+                            <input type="number" id="weight" name="weight" min="20" max="300" step="0.1" required placeholder="如 65" />
+                            <span class="unit">kg</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="ap_hi">收缩压</label>
+                        <div class="input-wrap">
+                            <input type="number" id="ap_hi" name="ap_hi" min="90" max="250" required placeholder="如 120" />
+                            <span class="unit">mmHg</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="ap_lo">舒张压</label>
+                        <div class="input-wrap">
+                            <input type="number" id="ap_lo" name="ap_lo" min="60" max="150" required placeholder="如 80" />
+                            <span class="unit">mmHg</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="cholesterol">胆固醇</label>
+                        <div class="input-wrap">
+                            <select id="cholesterol" name="cholesterol" required>
+                                <option value="1">正常</option>
+                                <option value="2">偏高</option>
+                                <option value="3">严重偏高</option>
+                            </select>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="gluc">血糖</label>
+                        <div class="input-wrap">
+                            <select id="gluc" name="gluc" required>
+                                <option value="1">正常</option>
+                                <option value="2">偏高</option>
+                                <option value="3">严重偏高</option>
+                            </select>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="smoke">吸烟</label>
+                        <div class="input-wrap">
+                            <select id="smoke" name="smoke" required>
+                                <option value="0">否</option>
+                                <option value="1">是</option>
+                            </select>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="alco">饮酒</label>
+                        <div class="input-wrap">
+                            <select id="alco" name="alco" required>
+                                <option value="0">否</option>
+                                <option value="1">是</option>
+                            </select>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                    </div>
+                    <div class="field full">
+                        <label for="active">经常运动</label>
+                        <div class="input-wrap">
+                            <select id="active" name="active" required>
+                                <option value="1">是</option>
+                                <option value="0">否</option>
+                            </select>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button type="submit" id="submit-btn">开始预测</button>
+                </div>
+            </form>
+
+            <div id="err"></div>
+
+            <!-- 结果: 监护仪读数 -->
+            <div id="result" class="result">
+                <div class="vital">
+                    <div class="vital-top">
+                        <span class="vital-label" id="res-label"></span>
+                        <span class="status-pill" id="res-pill"></span>
+                    </div>
+                    <div class="vital-value" id="res-prob"></div>
+                    <p class="vital-note" id="res-note"></p>
+                </div>
+            </div>
+        </section>
+
+        <footer>CardioAI · 模块2 预测器 — XGBoost / Flask</footer>
+    </div>
+
+    <script>
+        const form = document.getElementById("risk-form");
+        const submitBtn = document.getElementById("submit-btn");
+        const resultBox = document.getElementById("result");
+        const errBox = document.getElementById("err");
+        const resLabel = document.getElementById("res-label");
+        const resProb = document.getElementById("res-prob");
+        const resNote = document.getElementById("res-note");
+        const resPill = document.getElementById("res-pill");
+        const ecgPath = document.getElementById("ecg-path");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            errBox.style.display = "none";
+            resultBox.style.display = "none";
+            submitBtn.disabled = true;
+            submitBtn.textContent = "评估中…";
+
+            const ageYears = Number(document.getElementById("age").value);
+            const payload = {
+                age: Math.round(ageYears * 365),
+                gender: Number(document.getElementById("gender").value),
+                height: Number(document.getElementById("height").value),
+                weight: Number(document.getElementById("weight").value),
+                ap_hi: Number(document.getElementById("ap_hi").value),
+                ap_lo: Number(document.getElementById("ap_lo").value),
+                cholesterol: Number(document.getElementById("cholesterol").value),
+                gluc: Number(document.getElementById("gluc").value),
+                smoke: Number(document.getElementById("smoke").value),
+                alco: Number(document.getElementById("alco").value),
+                active: Number(document.getElementById("active").value),
+            };
+
+            try {
+                const resp = await fetch("/predict_cardio", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || "请求失败");
+
+                const isDisease = data.prediction === 1;
+                const percent = (data.probability * 100).toFixed(1);
+
+                // 波形颜色随风险变化: 青绿(低) / 红(高)
+                ecgPath.classList.toggle("high", isDisease);
+
+                const vital = resultBox.querySelector(".vital");
+                vital.classList.toggle("ok", !isDisease);
+                vital.classList.toggle("bad", isDisease);
+
+                resLabel.className = "vital-label " + (isDisease ? "bad" : "ok");
+                resLabel.textContent = isDisease ? "高风险 · 预测患有心血管疾病" : "低风险 · 预测无心血管疾病";
+
+                resPill.className = "status-pill " + (isDisease ? "bad" : "ok");
+                resPill.textContent = "prediction " + data.prediction;
+
+                resProb.textContent = percent + "%";
+                resNote.textContent = "患病风险概率（阈值 50%）。若出现高风险结果，建议及时咨询专业医生进行复查。";
+
+                resultBox.style.display = "block";
+            } catch (err) {
+                errBox.textContent = "预测失败：" + err.message;
+                errBox.style.display = "block";
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "开始预测";
+            }
+        });
+    </script>
+</body>
+</html>
